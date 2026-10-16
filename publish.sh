@@ -1,5 +1,5 @@
 #!/bin/bash
-# Publish the built .deb to the openserverless S3 bucket and record it in the
+# Publish the built .deb to the trupub S3 bucket (openserverless/ folder) and record it in the
 # GitHub release notes for this version.
 set -euo pipefail
 cd "$(dirname $0)"
@@ -9,7 +9,7 @@ echo "=== PUBLISH ==="
 # S3 credentials come from the environment (CI secrets); refuse to run without
 # a complete set rather than failing halfway through the upload.
 missing=()
-for v in S3_ENDPOINT S3_REGION S3_KEY S3_SECRET; do
+for v in TRUPUB_ENDPOINT TRUPUB_REGION TRUPUB_KEY TRUPUB_SECRET; do
     if [ -z "${!v:-}" ]; then missing+=("$v"); fi
 done
 if [ "${#missing[@]}" -ne 0 ]; then
@@ -17,8 +17,9 @@ if [ "${#missing[@]}" -ne 0 ]; then
     exit 1
 fi
 
-BUCKET="openserverless"
-PUBLIC_URL="https://openserverless.nuvolaris.download"
+BUCKET="trupub"
+PREFIX="openserverless"
+PUBLIC_URL="https://pub.trustant.ai/${PREFIX}"
 DISTDIR="$(cd .. && pwd)/dist"
 
 # package.sh wrote the version alongside the .deb.
@@ -40,12 +41,12 @@ fi
 
 echo "Publishing ${DEBNAME} (version ${VERSION}, arch ${ARCH})"
 
-export AWS_ACCESS_KEY_ID="${S3_KEY}"
-export AWS_SECRET_ACCESS_KEY="${S3_SECRET}"
-export AWS_DEFAULT_REGION="${S3_REGION}"
+export AWS_ACCESS_KEY_ID="${TRUPUB_KEY}"
+export AWS_SECRET_ACCESS_KEY="${TRUPUB_SECRET}"
+export AWS_DEFAULT_REGION="${TRUPUB_REGION}"
 
-aws --endpoint-url "${S3_ENDPOINT}" \
-    s3 cp "${DEB}" "s3://${BUCKET}/${DEBNAME}" \
+aws --endpoint-url "${TRUPUB_ENDPOINT}" \
+    s3 cp "${DEB}" "s3://${BUCKET}/${PREFIX}/${DEBNAME}" \
     --acl public-read \
     --content-type application/vnd.debian.binary-package
 

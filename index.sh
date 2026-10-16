@@ -7,7 +7,7 @@ cd "$(dirname $0)"
 echo "=== INDEX ==="
 
 missing=()
-for v in S3_ENDPOINT S3_REGION S3_KEY S3_SECRET; do
+for v in TRUPUB_ENDPOINT TRUPUB_REGION TRUPUB_KEY TRUPUB_SECRET; do
     if [ -z "${!v:-}" ]; then missing+=("$v"); fi
 done
 if [ "${#missing[@]}" -ne 0 ]; then
@@ -15,12 +15,13 @@ if [ "${#missing[@]}" -ne 0 ]; then
     exit 1
 fi
 
-BUCKET="openserverless"
-PUBLIC_URL="https://openserverless.nuvolaris.download"
+BUCKET="trupub"
+PREFIX="openserverless"
+PUBLIC_URL="https://pub.trustant.ai/${PREFIX}"
 
-export AWS_ACCESS_KEY_ID="${S3_KEY}"
-export AWS_SECRET_ACCESS_KEY="${S3_SECRET}"
-export AWS_DEFAULT_REGION="${S3_REGION}"
+export AWS_ACCESS_KEY_ID="${TRUPUB_KEY}"
+export AWS_SECRET_ACCESS_KEY="${TRUPUB_SECRET}"
+export AWS_DEFAULT_REGION="${TRUPUB_REGION}"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "${WORKDIR}"' EXIT
@@ -30,22 +31,28 @@ JSON="${WORKDIR}/index.json"
 
 # list-objects-v2 reports LastModified as ISO-8601 UTC, unlike `s3 ls` which
 # renders timestamps in the runner's local timezone. Output is tab-separated:
-# 2026-08-31T12:54:35.216000+00:00<TAB>3037597590<TAB>openserverless_..._amd64.deb
-aws --endpoint-url "${S3_ENDPOINT}" s3api list-objects-v2 \
+# 2026-08-31T12:54:35.216000+00:00<TAB>3037597590<TAB>openserverless/openserverless_..._amd64.deb
+aws --endpoint-url "${TRUPUB_ENDPOINT}" s3api list-objects-v2 \
     --bucket "${BUCKET}" \
+    --prefix "${PREFIX}/" \
     --query 'Contents[].[LastModified,Size,Key]' \
     --output text > "${LISTING}"
 
-# Split the ISO stamp into "date time" (dropping fractional seconds and the
-# +00:00 offset) so the fields match what the formatter below expects.
-awk -F'\t' '$3 ~ /^openserverless_.*\.deb$/ {
+# Strip the folder prefix from the key, then split the ISO stamp into
+# "date time" (dropping fractional seconds and the +00:00 offset) so the
+# fields match what the formatter below expects.
+PREFIX="${PREFIX}" awk -F'\t' '{
+    key = $3
+    if (substr(key, 1, length(ENVIRON["PREFIX"]) + 1) != ENVIRON["PREFIX"] "/") next
+    key = substr(key, length(ENVIRON["PREFIX"]) + 2)
+    if (key !~ /^openserverless_[^\/]*\.deb$/) next
     split($1, t, "T")
     sub(/\..*$/, "", t[2])
-    print t[1]" "t[2]" "$2" "$3
+    print t[1]" "t[2]" "$2" "key
 }' "${LISTING}" > "${LISTING}.deb"
 
 if [ ! -s "${LISTING}.deb" ]; then
-    echo "No .deb files found in s3://${BUCKET}/" >&2
+    echo "No .deb files found in s3://${BUCKET}/${PREFIX}/" >&2
     exit 1
 fi
 
@@ -141,8 +148,8 @@ END {
     print "</html>"
 }' "${LISTING}.deb" > "${HTML}"
 
-aws --endpoint-url "${S3_ENDPOINT}" \
-    s3 cp "${HTML}" "s3://${BUCKET}/index.html" \
+aws --endpoint-url "${TRUPUB_ENDPOINT}" \
+    s3 cp "${HTML}" "s3://${BUCKET}/${PREFIX}/index.html" \
     --acl public-read \
     --content-type "text/html; charset=utf-8" \
     --cache-control "public, max-age=300"
@@ -185,8 +192,8 @@ END {
     printf "}\n"
 }' "${LISTING}.deb" > "${JSON}"
 
-aws --endpoint-url "${S3_ENDPOINT}" \
-    s3 cp "${JSON}" "s3://${BUCKET}/index.json" \
+aws --endpoint-url "${TRUPUB_ENDPOINT}" \
+    s3 cp "${JSON}" "s3://${BUCKET}/${PREFIX}/index.json" \
     --acl public-read \
     --content-type "application/json" \
     --cache-control "public, max-age=300"

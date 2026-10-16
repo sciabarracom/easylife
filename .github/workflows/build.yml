@@ -63,10 +63,10 @@ jobs:
 
       - name: publish
         env:
-          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
-          S3_REGION: ${{ secrets.S3_REGION }}
-          S3_KEY: ${{ secrets.S3_KEY }}
-          S3_SECRET: ${{ secrets.S3_SECRET }}
+          TRUPUB_ENDPOINT: ${{ secrets.TRUPUB_ENDPOINT }}
+          TRUPUB_REGION: ${{ secrets.TRUPUB_REGION }}
+          TRUPUB_KEY: ${{ secrets.TRUPUB_KEY }}
+          TRUPUB_SECRET: ${{ secrets.TRUPUB_SECRET }}
           GH_TOKEN: ${{ github.token }}
         run: |
           # package.sh runs under sudo, so the artifacts are root-owned.
@@ -76,9 +76,9 @@ jobs:
 
       - name: index
         env:
-          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
-          S3_REGION: ${{ secrets.S3_REGION }}
-          S3_KEY: ${{ secrets.S3_KEY }}
-          S3_SECRET: ${{ secrets.S3_SECRET }}
+          TRUPUB_ENDPOINT: ${{ secrets.TRUPUB_ENDPOINT }}
+          TRUPUB_REGION: ${{ secrets.TRUPUB_REGION }}
+          TRUPUB_KEY: ${{ secrets.TRUPUB_KEY }}
+          TRUPUB_SECRET: ${{ secrets.TRUPUB_SECRET }}
         run: ./index.sh
         working-directory: packages

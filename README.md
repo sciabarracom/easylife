@@ -58,12 +58,12 @@ to `../dist/version.txt` by `package.sh` and read back by `publish.sh`.
 ## Publish
 
 ```bash
-S3_ENDPOINT=... S3_REGION=... S3_KEY=... S3_SECRET=... ./publish.sh
+TRUPUB_ENDPOINT=... TRUPUB_REGION=... TRUPUB_KEY=... TRUPUB_SECRET=... ./publish.sh
 ```
 
 `publish.sh` uploads `../dist/openserverless_<version>_<arch>.deb` to the
-`openserverless` bucket, publicly served from
-<https://openserverless.nuvolaris.download>, then adds a link to the notes of the
+`openserverless/` folder of the `trupub` bucket, publicly served from
+<https://pub.trustant.ai/openserverless>, then adds a link to the notes of the
 `v<version>` GitHub release, creating the release if it does not yet exist.
 
 The amd64 and arm64 jobs publish to the same release tag concurrently, so the
@@ -72,30 +72,29 @@ architecture and preserves the other's, retrying if a concurrent write wins the
 race. Without `GH_TOKEN`/`GITHUB_TOKEN` the upload still runs and the release
 step is skipped.
 
-The workflow expects four repository secrets: `S3_ENDPOINT`, `S3_REGION`, `S3_KEY`
-and `S3_SECRET`.
+The workflow expects four repository secrets: `TRUPUB_ENDPOINT`, `TRUPUB_REGION`, `TRUPUB_KEY`
+and `TRUPUB_SECRET`.
 
 ## Download index
 
 `publish.sh` calls [index.sh](index.sh) after every upload, and it can also be
-run on its own with the same four `S3_*` variables:
+run on its own with the same four `TRUPUB_*` variables:
 
 ```bash
-S3_ENDPOINT=... S3_REGION=... S3_KEY=... S3_SECRET=... ./index.sh
+TRUPUB_ENDPOINT=... TRUPUB_REGION=... TRUPUB_KEY=... TRUPUB_SECRET=... ./index.sh
 ```
 
-It lists the `.deb` files currently in the bucket and writes two files to the
-bucket root:
+It lists the `.deb` files currently in the folder and writes two files next to them:
 
-- `/index.html` — a human-readable page grouping packages by version, with each
+- `https://pub.trustant.ai/openserverless/index.html` — a human-readable page grouping packages by version, with each
   version's architectures and publication date, newest version first.
-- `/index.json` — the same data for scripts, keyed by architecture:
+- `https://pub.trustant.ai/openserverless/index.json` — the same data for scripts, keyed by architecture:
 
 ```json
 {
   "amd64": {
-    "0.1.0+f1553b": "https://openserverless.nuvolaris.download/openserverless_0.1.0+f1553b_amd64.deb",
-    "latest": "https://openserverless.nuvolaris.download/openserverless_0.1.0+f1553b_amd64.deb"
+    "0.1.0+f1553b": "https://pub.trustant.ai/openserverless/openserverless_0.1.0+f1553b_amd64.deb",
+    "latest": "https://pub.trustant.ai/openserverless/openserverless_0.1.0+f1553b_amd64.deb"
   }
 }
 ```
@@ -105,7 +104,7 @@ an installer can fetch the current build without knowing a version number:
 
 ```bash
 arch="$(dpkg --print-architecture)"
-url="$(curl -sS https://openserverless.nuvolaris.download/index.json | jq -r ".\"$arch\".latest")"
+url="$(curl -sS https://pub.trustant.ai/openserverless/index.json | jq -r ".\"$arch\".latest")"
 ```
 
 The page is generated purely from what the bucket holds, so it is always
