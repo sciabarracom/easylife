@@ -4,30 +4,62 @@ set -euo pipefail
 cd "$(dirname $0)"
 
 echo "=== PACKAGE ==="
+# Usage: ./package.sh [--test] [<name> <version>]
+#
 # --test builds a reduced package that bundles ONLY /var/lib/rancher/k3s/server
 # (the control plane), skipping the rest of the k3s state tree (the data). Use it
 # to verify the install flow quickly without shipping the full data set.
+#
+# <name> <version> override the package name and version, e.g.
+# `./package.sh trustant 1.0.0` builds dist/trustant_1.0.0_<arch>.deb.
+# Without them the name is "openserverless" and the version comes from ops.
 TEST_BUILD=0
+POSITIONAL=()
 for arg in "$@"; do
     case "$arg" in
         --test) TEST_BUILD=1 ;;
+        -*) echo "Unknown option: $arg" >&2; exit 1 ;;
+        *) POSITIONAL+=("$arg") ;;
     esac
 done
+if [ "${#POSITIONAL[@]}" -ne 0 ] && [ "${#POSITIONAL[@]}" -ne 2 ]; then
+    echo "Usage: $0 [--test] [<name> <version>]" >&2
+    exit 1
+fi
 
-# Version is derived from `ops -info`: the ops branch plus the short (6 char)
-# tasks commit hash, e.g. 0.1.0+f7613c
 OPS_INFO="$(ops -info)"
 info_field() { printf '%s\n' "${OPS_INFO}" | awk -v k="$1:" '$1==k{print $2; exit}'; }
 OPS_BRANCH="$(info_field OPS_BRANCH)"
 OPS_TASKS="$(info_field OPS_TASKS)"
 OPS_REPO="${OPS_REPO:-$(info_field OPS_REPO)}"
-if [ -z "${OPS_BRANCH}" ] || [ -z "${OPS_TASKS}" ]; then
-    echo "Cannot determine version: ops -info did not report OPS_BRANCH/OPS_TASKS" >&2
+if [ -z "${OPS_BRANCH}" ]; then
+    echo "ops -info did not report OPS_BRANCH" >&2
     exit 1
 fi
-VERSION="${OPS_BRANCH}+${OPS_TASKS:0:6}"
+
+if [ "${#POSITIONAL[@]}" -eq 2 ]; then
+    PKGNAME="${POSITIONAL[0]}"
+    VERSION="${POSITIONAL[1]}"
+    # Debian policy: lowercase name, version starting with a digit.
+    if ! [[ "${PKGNAME}" =~ ^[a-z0-9][a-z0-9+.-]+$ ]]; then
+        echo "Invalid package name: ${PKGNAME}" >&2
+        exit 1
+    fi
+    if ! [[ "${VERSION}" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]]; then
+        echo "Invalid version: ${VERSION}" >&2
+        exit 1
+    fi
+else
+    # Version is derived from `ops -info`: the ops branch plus the short (6
+    # char) tasks commit hash, e.g. 0.1.0+f7613c
+    if [ -z "${OPS_TASKS}" ]; then
+        echo "Cannot determine version: ops -info did not report OPS_TASKS" >&2
+        exit 1
+    fi
+    PKGNAME="openserverless"
+    VERSION="${OPS_BRANCH}+${OPS_TASKS:0:6}"
+fi
 ARCH="$(dpkg --print-architecture)"
-PKGNAME="openserverless"
 DISTDIR="$(cd .. && pwd)/dist"
 if [ "${TEST_BUILD}" -eq 1 ]; then
     DEB="${DISTDIR}/${PKGNAME}_${VERSION}_${ARCH}-test.deb"
@@ -252,11 +284,11 @@ set -e
 # remove it first.
 if [ -n "$2" ] || [ "$1" = "upgrade" ]; then
     cat >&2 <<'MSG'
-ERROR: openserverless is already installed.
+ERROR: @PKGNAME@ is already installed.
 
 Please remove the existing package before installing this one:
 
-    sudo apt-get purge openserverless
+    sudo apt-get purge @PKGNAME@
 
 then re-run the installation.
 MSG
@@ -401,12 +433,15 @@ if [ "$1" = "purge" ]; then
 else
     cat <<'MSG'
 Your user data is stored under /home/trustant and is not removed automatically.
-To delete it, run: apt-get purge openserverless   (or remove /home/trustant manually)
+To delete it, run: apt-get purge @PKGNAME@   (or remove /home/trustant manually)
 MSG
 fi
 exit 0
 EOF
 sudo chmod 0755 "${PKGROOT}/DEBIAN/postrm"
+
+# The maintainer scripts are quoted heredocs; fill in the package name here.
+sudo sed -i "s/@PKGNAME@/${PKGNAME}/g" "${PKGROOT}"/DEBIAN/{preinst,postrm}
 
 echo Packaging
 # data.tar.zst was already built directly from the source paths (no copy).
