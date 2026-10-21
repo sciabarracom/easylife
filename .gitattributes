@@ -1,2 +1,2 @@
 *.sh text eol=lf
-version.txt text eol=lf
+version.txt text eol=lfdebian/* text eol=lf

@@ -158,9 +158,19 @@ sudo chmod 0644 "${TRUHOME}/.profile"
 # data.tar.
 sudo chown -R 769:769 "${TRUHOME}"
 
+# trudoctor, the diagnostic tool, is built from ./trudoctor and installed at its
+# real location like the rest of the payload. It is setuid root so any user can
+# run it: it needs root for `k3s kubectl`. The build cache stays in the staging
+# dir so a `sudo -E` run leaves no root-owned files in the caller's home.
+echo "Building trudoctor..."
+GOCACHE="${PKGROOT}/gocache" CGO_ENABLED=0 \
+    go build -C trudoctor -trimpath -ldflags="-s -w" -o "${PKGROOT}/trudoctor" .
+sudo install -o root -g root -m 4755 "${PKGROOT}/trudoctor" /usr/local/bin/trudoctor
+
 # Files bundled verbatim from their real locations (no copy). The two helper
 # scripts above are included here so the whole payload tars from a single root.
 FILES=(
+    /usr/local/bin/trudoctor
     /usr/local/bin/k3s
     /usr/local/bin/crictl
     /usr/local/bin/k3s-killall.sh
@@ -276,181 +286,13 @@ Description: ${PRODUCT} k3s-based platform package
 EOF
 
 
-sudo tee "${PKGROOT}/DEBIAN/preinst" >/dev/null <<'EOF'
-#!/bin/bash
-set -e
-
-# A previous trustant package is already installed (this is an upgrade or
-# reinstall: $1 is "upgrade", or "install" with a 2nd arg = the old version).
-# We do NOT support installing over an existing trustant. Tell the user to
-# remove it first.
-if [ -n "$2" ] || [ "$1" = "upgrade" ]; then
-    cat >&2 <<'MSG'
-ERROR: @PKGNAME@ is already installed.
-
-Please remove the existing package before installing this one:
-
-    sudo apt-get purge @PKGNAME@
-
-then re-run the installation.
-MSG
-    exit 1
-fi
-
-if [ -d /var/lib/rancher/k3s ]; then
-    cat >&2 <<'MSG'
-ERROR: an existing k3s installation was detected (/var/lib/rancher/k3s).
-
-@PRODUCT@ bundles its own k3s and cannot be installed alongside another one.
-Uninstall the existing k3s first:
-
-    k3s-killall.sh && k3s-uninstall.sh
-
-then re-run the installation.
-MSG
-    exit 1
-fi
-
-port_busy() {
-    local p="$1"
-    # Read the kernel socket tables directly — no ss/netstat dependency.
-    # /proc/net/tcp{,6} always exist on Linux. Column 2 is "local_address:port"
-    # with port in hex; column 4 == 0A means LISTEN.
-    local hexp
-    hexp=$(printf '%04X' "$p")
-    awk -v hp=":$hexp" '$2 ~ hp"$" && $4=="0A"{found=1} END{exit !found}' \
-        /proc/net/tcp /proc/net/tcp6 2>/dev/null
-}
-
-BUSY=""
-for p in 80 443 6443; do
-    if port_busy "$p"; then
-        BUSY="${BUSY:+$BUSY, }$p"
-    fi
+# Maintainer scripts live in ./debian; @PKGNAME@ and @PRODUCT@ placeholders
+# are filled in here.
+for s in preinst postinst prerm postrm; do
+    sed -e "s/@PKGNAME@/${PKGNAME}/g" -e "s/@PRODUCT@/${PRODUCT}/g" "debian/${s}" \
+        | sudo tee "${PKGROOT}/DEBIAN/${s}" >/dev/null
+    sudo chmod 0755 "${PKGROOT}/DEBIAN/${s}"
 done
-if [ -n "$BUSY" ]; then
-    cat >&2 <<MSG
-ERROR: port(s) ${BUSY} already in use. @PRODUCT@ needs ports 80, 443 and 6443 to be free.
-
-Stop the services currently listening on those ports (and uninstall any existing
-k3s) before installing:
-
-    k3s-killall.sh && k3s-uninstall.sh
-
-then re-run the installation.
-MSG
-    exit 1
-fi
-
-exit 0
-EOF
-sudo chmod 0755 "${PKGROOT}/DEBIAN/preinst"
-
-sudo tee "${PKGROOT}/DEBIAN/postinst" >/dev/null <<'EOF'
-#!/bin/bash
-set -e
-
-groupadd --gid 769 trustant 2>/dev/null || true
-# --no-create-home: the whole home (ops CLI, .ops config, kubeconfig, workspace)
-# ships in the package, already owned 769:769.
-useradd --uid 769 --gid 769 --no-create-home --home-dir /home/trustant --shell /bin/bash trustant 2>/dev/null || true
-# Re-assert ownership in case the uid/gid had to be allocated differently.
-chown -R trustant:trustant /home/trustant 2>/dev/null || true
-
-cat >/etc/sudoers.d/trustant <<'SUDOERS'
-trustant ALL=(ALL) NOPASSWD:ALL
-SUDOERS
-chmod 0440 /etc/sudoers.d/trustant
-
-IFACE="$(ip -4 route show default | awk '{print $5; exit}')"
-if [ -z "$IFACE" ]; then
-    echo "WARNING: no default route found; skipping firewall dropin install." >&2
-else
-    mkdir -p /etc/systemd/system/k3s.service.d
-    cat >/etc/systemd/system/k3s.service.d/blockports.conf <<DROPIN
-[Service]
-ExecStartPre=/sbin/iptables -t raw -I PREROUTING -i ${IFACE} -p tcp -m multiport --dports 80,443,6443 -j DROP
-ExecStopPost=/sbin/iptables -t raw -D PREROUTING -i ${IFACE} -p tcp -m multiport --dports 80,443,6443 -j DROP
-DROPIN
-fi
-
-systemctl daemon-reload
-systemctl enable k3s.service
-systemctl start k3s.service
-
-cat <<'MSG'
-**************************************************************************************
-@PRODUCT@ is accessible only locally through the miniops.me domain.
-
-If you are running @PRODUCT@ on your local machine, open your browser and navigate to:
-
-http://trustant.miniops.me
-
-If @PRODUCT@ is running on a remote server, create an SSH tunnel:
-
-ssh -L <port>:127.0.0.1:80 <your-server>
-
-Then open your browser and navigate to:
-
-http://trustant.miniops.me:<port>
-**************************************************************************************
-MSG
-
-exit 0
-EOF
-sudo chmod 0755 "${PKGROOT}/DEBIAN/postinst"
-
-sudo tee "${PKGROOT}/DEBIAN/prerm" >/dev/null <<'EOF'
-#!/bin/bash
-set -e
-systemctl disable k3s.service 2>/dev/null || true
-systemctl stop k3s.service 2>/dev/null || true
-if [ -x /usr/local/bin/k3s-killall.sh ]; then
-    /usr/local/bin/k3s-killall.sh >/dev/null 2>&1 || true
-fi
-exit 0
-EOF
-sudo chmod 0755 "${PKGROOT}/DEBIAN/prerm"
-
-sudo tee "${PKGROOT}/DEBIAN/postrm" >/dev/null <<'EOF'
-#!/bin/bash
-set -e
-if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-    rm -f /etc/sudoers.d/trustant
-    rm -f /etc/systemd/system/k3s.service.d/blockports.conf
-    rmdir /etc/systemd/system/k3s.service.d 2>/dev/null || true
-    systemctl daemon-reload 2>/dev/null || true
-
-    # Full cleanup of the k3s state tree. dpkg leaves non-empty dirs (and any
-    # files k3s recreated at runtime) behind, so remove it explicitly.
-    rm -rf /var/lib/rancher/k3s
-fi
-
-# The trustant account and its home survive a plain remove: dpkg takes back the
-# files it shipped under /home/trustant, but anything the user created there is
-# theirs, and deleting the account would orphan it to a bare uid. Only purge
-# removes both.
-if [ "$1" = "purge" ]; then
-    rm -rf /home/trustant
-    if id trustant >/dev/null 2>&1; then
-        userdel trustant 2>/dev/null || true
-    fi
-    if getent group trustant >/dev/null 2>&1; then
-        groupdel trustant 2>/dev/null || true
-    fi
-else
-    cat <<'MSG'
-Your user data is stored under /home/trustant and is not removed automatically.
-To delete it, run: apt-get purge @PKGNAME@   (or remove /home/trustant manually)
-MSG
-fi
-exit 0
-EOF
-sudo chmod 0755 "${PKGROOT}/DEBIAN/postrm"
-
-# The maintainer scripts are quoted heredocs; fill in the names here.
-sudo sed -i -e "s/@PKGNAME@/${PKGNAME}/g" -e "s/@PRODUCT@/${PRODUCT}/g" \
-    "${PKGROOT}"/DEBIAN/{preinst,postinst,postrm}
 
 echo Packaging
 # data.tar.zst was already built directly from the source paths (no copy).

@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    rm -f /etc/sudoers.d/trustant
+    rm -f /etc/systemd/system/k3s.service.d/blockports.conf
+    rmdir /etc/systemd/system/k3s.service.d 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+
+    # Full cleanup of the k3s state tree. dpkg leaves non-empty dirs (and any
+    # files k3s recreated at runtime) behind, so remove it explicitly.
+    rm -rf /var/lib/rancher/k3s
+fi
+
+# The trustant account and its home survive a plain remove: dpkg takes back the
+# files it shipped under /home/trustant, but anything the user created there is
+# theirs, and deleting the account would orphan it to a bare uid. Only purge
+# removes both.
+if [ "$1" = "purge" ]; then
+    rm -rf /home/trustant
+    if id trustant >/dev/null 2>&1; then
+        userdel trustant 2>/dev/null || true
+    fi
+    if getent group trustant >/dev/null 2>&1; then
+        groupdel trustant 2>/dev/null || true
+    fi
+else
+    cat <<'MSG'
+Your user data is stored under /home/trustant and is not removed automatically.
+To delete it, run: apt-get purge @PKGNAME@   (or remove /home/trustant manually)
+MSG
+fi
+exit 0

@@ -25,6 +25,7 @@ system packages, create a `trustant` user and take over k3s on the host.
 | [package.sh](package.sh) | Assembles the `.deb` from the prepared machine state |
 | [publish.sh](publish.sh) | Uploads the `.deb` to S3 and records it in the GitHub release |
 | [index.sh](index.sh) | Regenerates the bucket's `index.html` and `index.json` |
+| [trudoctor/](trudoctor/) | Diagnostic tool, built by `package.sh` and shipped setuid root as `/usr/local/bin/trudoctor` |
 | [.github/workflows/build.yml](.github/workflows/build.yml) | Runs all four, for amd64 and arm64 |
 
 Build output goes to `../dist` — a sibling of this directory, not inside it.

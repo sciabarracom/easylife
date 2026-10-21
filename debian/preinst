@@ -1,0 +1,66 @@
+#!/bin/bash
+set -e
+
+# A previous trustant package is already installed (this is an upgrade or
+# reinstall: $1 is "upgrade", or "install" with a 2nd arg = the old version).
+# We do NOT support installing over an existing trustant. Tell the user to
+# remove it first.
+if [ -n "$2" ] || [ "$1" = "upgrade" ]; then
+    cat >&2 <<'MSG'
+ERROR: @PKGNAME@ is already installed.
+
+Please remove the existing package before installing this one:
+
+    sudo apt-get purge @PKGNAME@
+
+then re-run the installation.
+MSG
+    exit 1
+fi
+
+if [ -d /var/lib/rancher/k3s ]; then
+    cat >&2 <<'MSG'
+ERROR: an existing k3s installation was detected (/var/lib/rancher/k3s).
+
+@PRODUCT@ bundles its own k3s and cannot be installed alongside another one.
+Uninstall the existing k3s first:
+
+    k3s-killall.sh && k3s-uninstall.sh
+
+then re-run the installation.
+MSG
+    exit 1
+fi
+
+port_busy() {
+    local p="$1"
+    # Read the kernel socket tables directly — no ss/netstat dependency.
+    # /proc/net/tcp{,6} always exist on Linux. Column 2 is "local_address:port"
+    # with port in hex; column 4 == 0A means LISTEN.
+    local hexp
+    hexp=$(printf '%04X' "$p")
+    awk -v hp=":$hexp" '$2 ~ hp"$" && $4=="0A"{found=1} END{exit !found}' \
+        /proc/net/tcp /proc/net/tcp6 2>/dev/null
+}
+
+BUSY=""
+for p in 80 443 6443; do
+    if port_busy "$p"; then
+        BUSY="${BUSY:+$BUSY, }$p"
+    fi
+done
+if [ -n "$BUSY" ]; then
+    cat >&2 <<MSG
+ERROR: port(s) ${BUSY} already in use. @PRODUCT@ needs ports 80, 443 and 6443 to be free.
+
+Stop the services currently listening on those ports (and uninstall any existing
+k3s) before installing:
+
+    k3s-killall.sh && k3s-uninstall.sh
+
+then re-run the installation.
+MSG
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+
+groupadd --gid 769 trustant 2>/dev/null || true
+# --no-create-home: the whole home (ops CLI, .ops config, kubeconfig, workspace)
+# ships in the package, already owned 769:769.
+useradd --uid 769 --gid 769 --no-create-home --home-dir /home/trustant --shell /bin/bash trustant 2>/dev/null || true
+# Re-assert ownership in case the uid/gid had to be allocated differently.
+chown -R trustant:trustant /home/trustant 2>/dev/null || true
+
+cat >/etc/sudoers.d/trustant <<'SUDOERS'
+trustant ALL=(ALL) NOPASSWD:ALL
+SUDOERS
+chmod 0440 /etc/sudoers.d/trustant
+
+IFACE="$(ip -4 route show default | awk '{print $5; exit}')"
+if [ -z "$IFACE" ]; then
+    echo "WARNING: no default route found; skipping firewall dropin install." >&2
+else
+    mkdir -p /etc/systemd/system/k3s.service.d
+    cat >/etc/systemd/system/k3s.service.d/blockports.conf <<DROPIN
+[Service]
+ExecStartPre=/sbin/iptables -t raw -I PREROUTING -i ${IFACE} -p tcp -m multiport --dports 80,443,6443 -j DROP
+ExecStopPost=/sbin/iptables -t raw -D PREROUTING -i ${IFACE} -p tcp -m multiport --dports 80,443,6443 -j DROP
+DROPIN
+fi
+
+systemctl daemon-reload
+systemctl enable k3s.service
+systemctl start k3s.service
+
+cat <<'MSG'
+**************************************************************************************
+@PRODUCT@ is accessible only locally through the miniops.me domain.
+
+If you are running @PRODUCT@ on your local machine, open your browser and navigate to:
+
+http://trustant.miniops.me
+
+If @PRODUCT@ is running on a remote server, create an SSH tunnel:
+
+ssh -L <port>:127.0.0.1:80 <your-server>
+
+Then open your browser and navigate to:
+
+http://trustant.miniops.me:<port>
+**************************************************************************************
+MSG
+
+exit 0
