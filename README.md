@@ -20,7 +20,6 @@ system packages, create a `trustant` user and take over k3s on the host.
 
 | File | Role |
 | --- | --- |
-| [env](env) | Version inputs: `OPS_BRANCH` and the tasks repo, sourced by every script |
 | [setup.sh](setup.sh) | Installs build dependencies, the `trustant` user and the `ops` CLI |
 | [prepare.sh](prepare.sh) | Installs k3s, deploys OpenServerless onto it, trims and stops it |
 | [package.sh](package.sh) | Assembles the `.deb` from the prepared machine state |
@@ -49,10 +48,20 @@ This produces, in `../dist`:
 control plane (`/var/lib/rancher/k3s/server`) and skips the data tree. It is for
 validating the install flow quickly, not for release.
 
+The first argument selects the flavour, `openserverless` (the default) or
+`trustant`. It sets the package name and the product name shown in the
+install messages. An optional second argument overrides the version:
+
+```bash
+sudo -E ./package.sh trustant          # dist/trustant_<version>_<arch>.deb
+sudo -E ./package.sh trustant 1.0.0    # dist/trustant_1.0.0_<arch>.deb
+```
+
 ### Versioning
 
 The version is derived from `ops -info`, as the ops branch plus the first six
-characters of the tasks commit hash — for example `0.1.0+f7613c`. It is written
+characters of the tasks commit hash — for example `0.1.0+f7613c` — unless one
+is given on the command line. It is written
 to `../dist/version.txt` by `package.sh` and read back by `publish.sh`.
 
 ## Publish
@@ -130,7 +139,7 @@ falls back to copying the file as root and the install proceeds. Move the file
 to `/tmp` to avoid it.
 
 The package refuses to install if OpenServerless is already installed, if another
-k3s installation exists at `/var/lib/rancher/k3s`, or if port 80 is in use — it
+k3s installation exists at `/var/lib/rancher/k3s`, or if any of ports 80, 443 or 6443 is in use — it
 bundles its own k3s and cannot coexist with another one. On success it creates
 the `trustant` user (uid/gid 769), installs a firewall drop-in restricting ports
 80/443/6443 to non-external traffic, and starts k3s.

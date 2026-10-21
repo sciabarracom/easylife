@@ -30,6 +30,9 @@ ops setup kubernetes create
 ops setup openserverless streamer deploy
 ops setup openserverless system-api deploy
 ops setup openserverless tika deploy
+if test -d oplugins-truinst
+then ops truinst trustant deploy
+fi
 
 echo "=== test ==="
 

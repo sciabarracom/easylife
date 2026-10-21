@@ -4,15 +4,16 @@ set -euo pipefail
 cd "$(dirname $0)"
 
 echo "=== PACKAGE ==="
-# Usage: ./package.sh [--test] [<name> <version>]
+# Usage: ./package.sh [--test] [openserverless|trustant] [<version>]
 #
 # --test builds a reduced package that bundles ONLY /var/lib/rancher/k3s/server
 # (the control plane), skipping the rest of the k3s state tree (the data). Use it
 # to verify the install flow quickly without shipping the full data set.
 #
-# <name> <version> override the package name and version, e.g.
+# The first parameter selects the flavour: it sets the package name and the
+# product name shown to the user. Default is "openserverless".
+# The optional <version> overrides the version derived from ops, e.g.
 # `./package.sh trustant 1.0.0` builds dist/trustant_1.0.0_<arch>.deb.
-# Without them the name is "openserverless" and the version comes from ops.
 TEST_BUILD=0
 POSITIONAL=()
 for arg in "$@"; do
@@ -22,10 +23,17 @@ for arg in "$@"; do
         *) POSITIONAL+=("$arg") ;;
     esac
 done
-if [ "${#POSITIONAL[@]}" -ne 0 ] && [ "${#POSITIONAL[@]}" -ne 2 ]; then
-    echo "Usage: $0 [--test] [<name> <version>]" >&2
+if [ "${#POSITIONAL[@]}" -gt 2 ]; then
+    echo "Usage: $0 [--test] [openserverless|trustant] [<version>]" >&2
     exit 1
 fi
+
+PKGNAME="${POSITIONAL[0]:-openserverless}"
+case "${PKGNAME}" in
+    openserverless) PRODUCT="Apache OpenServerless" ;;
+    trustant) PRODUCT="Trustant" ;;
+    *) echo "Invalid package name: ${PKGNAME} (expected openserverless or trustant)" >&2; exit 1 ;;
+esac
 
 OPS_INFO="$(ops -info)"
 info_field() { printf '%s\n' "${OPS_INFO}" | awk -v k="$1:" '$1==k{print $2; exit}'; }
@@ -38,13 +46,8 @@ if [ -z "${OPS_BRANCH}" ]; then
 fi
 
 if [ "${#POSITIONAL[@]}" -eq 2 ]; then
-    PKGNAME="${POSITIONAL[0]}"
     VERSION="${POSITIONAL[1]}"
-    # Debian policy: lowercase name, version starting with a digit.
-    if ! [[ "${PKGNAME}" =~ ^[a-z0-9][a-z0-9+.-]+$ ]]; then
-        echo "Invalid package name: ${PKGNAME}" >&2
-        exit 1
-    fi
+    # Debian policy: version starting with a digit.
     if ! [[ "${VERSION}" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]]; then
         echo "Invalid version: ${VERSION}" >&2
         exit 1
@@ -56,7 +59,6 @@ else
         echo "Cannot determine version: ops -info did not report OPS_TASKS" >&2
         exit 1
     fi
-    PKGNAME="openserverless"
     VERSION="${OPS_BRANCH}+${OPS_TASKS:0:6}"
 fi
 ARCH="$(dpkg --print-architecture)"
@@ -269,8 +271,8 @@ Architecture: ${ARCH}
 Depends: iptables, systemd
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: Nuvolaris <info@nuvolaris.io>
-Description: Trustant k3s-based platform package
- Bundles k3s and trustant helper scripts for offline installation.
+Description: ${PRODUCT} k3s-based platform package
+ Bundles k3s with ${PRODUCT} preinstalled for offline installation.
 EOF
 
 
@@ -299,7 +301,7 @@ if [ -d /var/lib/rancher/k3s ]; then
     cat >&2 <<'MSG'
 ERROR: an existing k3s installation was detected (/var/lib/rancher/k3s).
 
-Apache OpenServerless bundles its own k3s and cannot be installed alongside another one.
+@PRODUCT@ bundles its own k3s and cannot be installed alongside another one.
 Uninstall the existing k3s first:
 
     k3s-killall.sh && k3s-uninstall.sh
@@ -320,11 +322,17 @@ port_busy() {
         /proc/net/tcp /proc/net/tcp6 2>/dev/null
 }
 
-if port_busy 80; then
-    cat >&2 <<'MSG'
-ERROR: port 80 is already in use. Apache OpenServerless needs port 80 to be free.
+BUSY=""
+for p in 80 443 6443; do
+    if port_busy "$p"; then
+        BUSY="${BUSY:+$BUSY, }$p"
+    fi
+done
+if [ -n "$BUSY" ]; then
+    cat >&2 <<MSG
+ERROR: port(s) ${BUSY} already in use. @PRODUCT@ needs ports 80, 443 and 6443 to be free.
 
-Stop the service currently listening on port 80 (and uninstall any existing
+Stop the services currently listening on those ports (and uninstall any existing
 k3s) before installing:
 
     k3s-killall.sh && k3s-uninstall.sh
@@ -372,13 +380,13 @@ systemctl start k3s.service
 
 cat <<'MSG'
 **************************************************************************************
-Trustant is accessible only locally through the miniops.me domain.
+@PRODUCT@ is accessible only locally through the miniops.me domain.
 
-If you are running Trustant on your local machine, open your browser and navigate to:
+If you are running @PRODUCT@ on your local machine, open your browser and navigate to:
 
 http://trustant.miniops.me
 
-If Trustant is running on a remote server, create an SSH tunnel:
+If @PRODUCT@ is running on a remote server, create an SSH tunnel:
 
 ssh -L <port>:127.0.0.1:80 <your-server>
 
@@ -440,8 +448,9 @@ exit 0
 EOF
 sudo chmod 0755 "${PKGROOT}/DEBIAN/postrm"
 
-# The maintainer scripts are quoted heredocs; fill in the package name here.
-sudo sed -i "s/@PKGNAME@/${PKGNAME}/g" "${PKGROOT}"/DEBIAN/{preinst,postrm}
+# The maintainer scripts are quoted heredocs; fill in the names here.
+sudo sed -i -e "s/@PKGNAME@/${PKGNAME}/g" -e "s/@PRODUCT@/${PRODUCT}/g" \
+    "${PKGROOT}"/DEBIAN/{preinst,postinst,postrm}
 
 echo Packaging
 # data.tar.zst was already built directly from the source paths (no copy).
