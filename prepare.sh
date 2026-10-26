@@ -25,20 +25,30 @@ echo "=== install openserverless ==="
 ops config slim
 ops config apihost miniops.me --protocol=http
 
-ops setup kubernetes create
-
-ops setup openserverless streamer deploy
-ops setup openserverless system-api deploy
-ops setup openserverless tika deploy
-if test -d oplugins-truinst
-then ops truinst trustant deploy
+if ! ops setup kubernetes create
+then trudoctor ; exit 1
 fi
 
-echo "=== test ==="
+if ! ops setup openserverless streamer deploy
+then trudoctor ; exit 1
+fi
 
-sudo k3s kubectl -n openserveress get ingress
-sudo k3s kubectl -n openserverless get sts
-sudo k3s kubectl -n openserverless get po
+if ! ops setup openserverless system-api deploy
+then trudoctor ; exit 1
+fi
+if ! ops setup openserverless tika deploy
+then trudoctor; exit 1
+fi
+
+if test -d oplugins-truinst
+then
+     if ! ops truinst trustant deploy
+     then trudoctor ; exit 1
+     fi
+fi
+
+echo "=== check ==="
+trudoctor || true
 
 echo "=== trim down openserverless ==="
 

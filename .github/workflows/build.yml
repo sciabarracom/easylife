@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: ${{ fromJson(needs.matrix.outputs.arch) }}
-    runs-on: ${{ matrix.arch == 'arm' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.arch == 'arm' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     steps:
       # The scripts write the .deb to ../dist relative to the repo, so check
       # out into a subdirectory to keep that path inside the workspace.
@@ -48,6 +48,10 @@ jobs:
         run: |
           uname -m
           dpkg --print-architecture
+
+      - name: compile doctor
+        run: go build . && sudo install -o root -g root -m 4755 ./trudoctor /usr/bin/trudoctor
+        working-directory: packages/trudoctor
 
       - name: setup
         run: ./setup.sh
