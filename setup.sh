@@ -21,3 +21,4 @@ sudo mv ~/.local/bin/ops /usr/bin/ops
 sudo chown root:root /usr/bin/ops
 sudo -iu trustant ops -update
 sudo -iu trustant ops -info
+sudo -iu trustant ops -config -d | grep IMAGES
