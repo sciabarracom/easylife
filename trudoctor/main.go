@@ -1,6 +1,6 @@
 // trudoctor checks a local OpenServerless/Trustant installation (DNS, API,
 // k3s cluster, pods), gathers details on any anomaly it finds and prints a
-// report with the relevant logs. See ../spec/trudoctor.md.
+// report, with the relevant logs when run with -v. See ../spec/trudoctor.md.
 //
 // Progress goes to stderr and the markdown report to stdout, so
 // `trudoctor > report.md` saves just the report.
@@ -15,6 +15,7 @@ import (
 func main() {
 	namespace := flag.String("namespace", "openserverless", "namespace of the OpenServerless pods")
 	tail := flag.Int("tail", 2000, "number of log lines collected per container")
+	verbose := flag.Bool("v", false, "include the container logs in the report")
 	flag.Parse()
 
 	if err := dropToRoot(); err != nil {
@@ -22,7 +23,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	d := newDoctor(*namespace, *tail)
+	d := newDoctor(*namespace, *tail, *verbose)
 
 	section("System")
 	d.runSystemChecks()
@@ -33,8 +34,10 @@ func main() {
 	section("Anomaly detection")
 	d.runAnomalyDetection()
 
-	section("Logs")
-	d.collectLogs()
+	if *verbose {
+		section("Logs")
+		d.collectLogs()
+	}
 
 	fmt.Print(d.buildReport())
 

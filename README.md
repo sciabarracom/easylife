@@ -25,7 +25,8 @@ system packages, create a `trustant` user and take over k3s on the host.
 | [package.sh](package.sh) | Assembles the `.deb` from the prepared machine state |
 | [publish.sh](publish.sh) | Uploads the `.deb` to S3 and records it in the GitHub release |
 | [index.sh](index.sh) | Regenerates the bucket's `index.html` and `index.json` |
-| [trudoctor/](trudoctor/) | Diagnostic tool, built by `package.sh` and shipped setuid root as `/usr/local/bin/trudoctor` |
+| [trudoctor/](trudoctor/) | Diagnostic tool, built by `prepare.sh` and shipped setuid root as `/usr/bin/trudoctor` |
+| [trulicense/](trulicense/) | Licence activation, built by `prepare.sh` and shipped setuid root as `/usr/bin/trulicense` |
 | [.github/workflows/build.yml](.github/workflows/build.yml) | Runs all four, for amd64 and arm64 |
 
 Build output goes to `../dist` — a sibling of this directory, not inside it.
@@ -142,8 +143,12 @@ to `/tmp` to avoid it.
 The package refuses to install if OpenServerless is already installed, if another
 k3s installation exists at `/var/lib/rancher/k3s`, or if any of ports 80, 443 or 6443 is in use — it
 bundles its own k3s and cannot coexist with another one. On success it creates
-the `trustant` user (uid/gid 769), installs a firewall drop-in restricting ports
-80/443/6443 to non-external traffic, and starts k3s.
+the `trustant` user (uid/gid 769) and starts k3s. When the package bundles
+trustant it also ships the k3s drop-in
+`/etc/systemd/system/k3s.service.d/blockports.conf` (from
+[blockports.conf](blockports.conf), installed by `prepare.sh`), a firewall that
+lets ports 80/443/6443 accept only local connections (loopback and the k3s pod
+network, IPv4 and IPv6).
 
 ### The `trustant` home
 

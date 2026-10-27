@@ -49,10 +49,6 @@ jobs:
           uname -m
           dpkg --print-architecture
 
-      - name: compile doctor
-        run: go build . && sudo install -o root -g root -m 4755 ./trudoctor /usr/bin/trudoctor
-        working-directory: packages/trudoctor
-
       - name: setup
         run: ./setup.sh
         working-directory: packages

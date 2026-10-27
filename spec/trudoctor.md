@@ -18,7 +18,6 @@ Use kubectl to test
 - check all the pods in namespace openserverless and verify they are all Running or Completed
 - check there are the following pods running:
 
-- openserverless-0
 - couchdb-0
 - openserverless-etcd-0
 - openserverless-mongodb-0

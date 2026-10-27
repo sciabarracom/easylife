@@ -157,7 +157,7 @@ func (d *Doctor) gather(a Anomaly) string {
 
 	case CrashLoopBackOff:
 		line("$ kubectl logs -n %s %s -c %s --previous", ns, name, a.Container)
-		line("%s", d.kube.text("logs", "-n", ns, name, "-c", a.Container, "--previous", d.tailArg()))
+		line("%s", d.containerLogs(ns, name, a.Container, "--previous"))
 
 	case CreateContainerConfigError:
 		if cs != nil && cs.State.Waiting != nil {
@@ -206,7 +206,7 @@ func (d *Doctor) gather(a Anomaly) string {
 		}
 		for _, cn := range containers {
 			line("$ kubectl logs -n %s %s -c %s", ns, name, cn)
-			line("%s\n", d.kube.text("logs", "-n", ns, name, "-c", cn, d.tailArg()))
+			line("%s\n", d.containerLogs(ns, name, cn))
 		}
 
 	case Evicted:
@@ -238,6 +238,16 @@ func (d *Doctor) gather(a Anomaly) string {
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// containerLogs returns the logs of a container, or a hint when they are left
+// out of the report because -v was not given.
+func (d *Doctor) containerLogs(ns, pod, container string, extra ...string) string {
+	if !d.verbose {
+		return "(logs omitted, run with -v to include them)"
+	}
+	args := append([]string{"logs", "-n", ns, pod, "-c", container}, extra...)
+	return d.kube.text(append(args, d.tailArg())...)
 }
 
 func (d *Doctor) tailArg() string { return fmt.Sprintf("--tail=%d", d.tail) }

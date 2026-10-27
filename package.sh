@@ -158,19 +158,14 @@ sudo chmod 0644 "${TRUHOME}/.profile"
 # data.tar.
 sudo chown -R 769:769 "${TRUHOME}"
 
-# trudoctor, the diagnostic tool, is built from ./trudoctor and installed at its
-# real location like the rest of the payload. It is setuid root so any user can
-# run it: it needs root for `k3s kubectl`. The build cache stays in the staging
-# dir so a `sudo -E` run leaves no root-owned files in the caller's home.
-echo "Building trudoctor..."
-GOCACHE="${PKGROOT}/gocache" CGO_ENABLED=0 \
-    go build -C trudoctor -trimpath -ldflags="-s -w" -o "${PKGROOT}/trudoctor" .
-sudo install -o root -g root -m 4755 "${PKGROOT}/trudoctor" /usr/local/bin/trudoctor
+# trudoctor (diagnostics) and trulicense (licence activation) are built and
+# installed setuid root under /usr/bin by prepare.sh: any user can run them,
+# as both need root for `k3s kubectl`. They are shipped from there as is.
 
-# Files bundled verbatim from their real locations (no copy). The two helper
-# scripts above are included here so the whole payload tars from a single root.
+# Files bundled verbatim from their real locations (no copy).
 FILES=(
-    /usr/local/bin/trudoctor
+    /usr/bin/trudoctor
+    /usr/bin/trulicense
     /usr/local/bin/k3s
     /usr/local/bin/crictl
     /usr/local/bin/k3s-killall.sh
@@ -202,6 +197,16 @@ if [ ! -d "${K3S_SUBTREE}" ]; then
     exit 1
 fi
 
+# The k3s drop-ins (the blockports.conf firewall) exist only when prepare.sh
+# deployed trustant; the directory is bundled as a whole when present.
+DROPIN_DIR="/etc/systemd/system/k3s.service.d"
+TREES=("${TRUHOME}")
+if [ -d "${DROPIN_DIR}" ]; then
+    TREES+=("${DROPIN_DIR}")
+else
+    echo "No ${DROPIN_DIR}: packaging without k3s drop-ins."
+fi
+
 # Build data.tar directly from the source paths, no intermediate copy.
 # -C / anchors every path at the filesystem root so each file lands at its
 # absolute install location inside the package.
@@ -219,10 +224,10 @@ echo "Building data.tar (tarring from source, no copy)..."
 MEMBERS_FILE="${PKGROOT}/members.lst"
 {
     # Each individual file plus all of its ancestor directories. The k3s state
-    # dir and the trustant home are listed too so their ancestors (./var,
+    # dir and the other trees are listed too so their ancestors (./var,
     # ./var/lib, ./home, ...) are emitted as directory entries; their contents
     # are appended recursively in passes 2 and 3.
-    for f in "${FILES[@]}" "${K3S_SUBTREE}" "${TRUHOME}"; do
+    for f in "${FILES[@]}" "${K3S_SUBTREE}" "${TREES[@]}"; do
         d="$f"
         while [ "$d" != "/" ]; do
             echo ".${d}"
@@ -251,12 +256,15 @@ sudo tar --append --numeric-owner \
     --exclude='./var/lib/rancher/k3s/server/tls' \
     ".${K3S_SUBTREE}"
 
-# Pass 3: append the staged trustant home recursively (owned 769:769 on disk,
-# so --numeric-owner carries that ownership straight into the package).
-sudo tar --append --numeric-owner \
-    -f "${DATA_TAR_RAW}" \
-    -C / \
-    ".${TRUHOME}"
+# Pass 3: append the other trees recursively: the staged trustant home (owned
+# 769:769 on disk, so --numeric-owner carries that ownership straight into the
+# package) and the k3s drop-ins.
+for t in "${TREES[@]}"; do
+    sudo tar --append --numeric-owner \
+        -f "${DATA_TAR_RAW}" \
+        -C / \
+        ".${t}"
+done
 
 # Compress to data.tar.zst.
 sudo zstd -q -f --rm "${DATA_TAR_RAW}" -o "${DATA_TAR}"
@@ -266,7 +274,7 @@ INSTALLED_SIZE=$(
     {
         for f in "${FILES[@]}"; do sudo du -sk "$f"; done
         sudo du -sk --exclude='*/server/tls' "${K3S_SUBTREE}"
-        sudo du -sk "${TRUHOME}"
+        for t in "${TREES[@]}"; do sudo du -sk "$t"; done
     } | awk '{s+=$1} END{print s}'
 )
 

@@ -19,17 +19,25 @@ the prefix of its section:
 | `CT:` | log of `controller-0` |
 | `TR:` | log of `trustant-0` |
 
+The `OP:`, `CT:` and `TR:` logs, and the container logs among the anomaly
+details, are included only with `-v`.
+
+Trustant is optional: when there is no `trustant-0` pod, trudoctor prints
+`trustant not installed`, reports `IN: trustant: not installed` and skips the
+`trustant-0` checks and logs, without counting it as a failure.
+
 The exit status is 1 when any check fails.
 
 | Flag | Default | |
 | --- | --- | --- |
 | `-namespace` | `openserverless` | Namespace of the platform pods |
 | `-tail` | `2000` | Log lines collected per container |
+| `-v` | off | Include the container logs in the report |
 
 ## Packaging
 
-[../package.sh](../package.sh) builds it and ships it as
-`/usr/local/bin/trudoctor`, setuid root, so any user can run it: kubectl runs
+[../prepare.sh](../prepare.sh) builds it and installs it as `/usr/bin/trudoctor`,
+and [../package.sh](../package.sh) ships it from there, setuid root, so any user can run it: kubectl runs
 as `k3s kubectl`, which needs root (without setuid, trudoctor falls back to
 `sudo k3s kubectl`).
 

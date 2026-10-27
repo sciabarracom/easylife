@@ -24,6 +24,9 @@ func (d *Doctor) collectLogs() {
 		return
 	}
 	for _, src := range logSources {
+		if src.Pod == trustantPod && d.trustant != "installed" {
+			continue
+		}
 		p := d.findPod(src.Pod)
 		if p == nil {
 			d.record("logs of "+src.Pod, Warn, "pod not found")
@@ -74,6 +77,7 @@ func (d *Doctor) buildReport() string {
 	line("IN", "hostname: %s", hostname())
 	line("IN", "host ip: %s", hostIP())
 	line("IN", "kubernetes: %s", orNone(d.k8sVersion))
+	line("IN", "trustant: %s", orNone(d.trustant))
 	line("IN", "os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 	line("IN", "date: %s", time.Now().Format(time.RFC3339))
 

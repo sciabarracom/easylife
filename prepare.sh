@@ -4,6 +4,15 @@ cd "$(dirname $0)"
 
 echo "=== PREPARE ==="
 
+echo "=== compile trulicense and trudoctor ==="
+
+# Static, stripped binaries, installed setuid root: both need root for
+# `k3s kubectl`.
+for tool in trudoctor trulicense; do
+    CGO_ENABLED=0 go build -C "${tool}" -trimpath -ldflags="-s -w" -o "${tool}" .
+    sudo install -o root -g root -m 4755 "${tool}/${tool}" "/usr/bin/${tool}"
+done
+
 echo "=== install k3s ==="
 
 if which k3s-killall.sh
@@ -45,10 +54,14 @@ then
      if ! ops truinst trustant deploy
      then trudoctor ; exit 1
      fi
+     sudo install -D -m 0644 blockports.conf /etc/systemd/system/k3s.service.d/blockports.conf
 fi
 
 echo "=== check ==="
 trudoctor || true
+
+
+exit
 
 echo "=== trim down openserverless ==="
 

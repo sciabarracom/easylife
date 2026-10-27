@@ -2,8 +2,6 @@
 set -e
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/sudoers.d/trustant
-    rm -f /etc/systemd/system/k3s.service.d/blockports.conf
-    rmdir /etc/systemd/system/k3s.service.d 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
 
     # Full cleanup of the k3s state tree. dpkg leaves non-empty dirs (and any

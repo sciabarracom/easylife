@@ -164,9 +164,10 @@ func (p *Pod) status(name string) *ContainerStatus {
 	return nil
 }
 
+const trustantPod = "trustant-0"
+
 // Pods the installation must have Running; '*' stands for a generated suffix.
 var requiredPods = []string{
-	"openserverless-0",
 	"couchdb-0",
 	"openserverless-etcd-0",
 	"openserverless-mongodb-0",
@@ -179,7 +180,7 @@ var requiredPods = []string{
 	"redis-0",
 	"registry-0",
 	"seaweedfs-0",
-	"trustant-0",
+	trustantPod, // only when trustant is installed
 	"tika-0",
 	"kubegres-controller-manager-*",
 }
@@ -238,7 +239,18 @@ func (d *Doctor) runKubeChecks() {
 		d.record("pods Running or Completed", Pass, fmt.Sprintf("all %d pods", len(nsPods)))
 	}
 
+	// Trustant is optional: without its pod the platform is plain
+	// OpenServerless, which is not an error.
+	d.trustant = "installed"
+	if d.findPod(trustantPod) == nil {
+		d.trustant = "not installed"
+		progress("trustant not installed")
+	}
+
 	for _, pat := range requiredPods {
+		if pat == trustantPod && d.trustant != "installed" {
+			continue
+		}
 		d.checkPhase(nsPods, pat, "Running", "pod")
 	}
 

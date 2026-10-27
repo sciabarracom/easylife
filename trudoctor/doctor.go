@@ -38,6 +38,8 @@ type LogSection struct {
 type Doctor struct {
 	namespace  string
 	tail       int
+	verbose    bool   // include container logs
+	trustant   string // "installed", "not installed", or "" when unknown
 	kube       *Kube
 	checks     []Check
 	pods       []Pod // all pods, every namespace
@@ -46,8 +48,8 @@ type Doctor struct {
 	k8sVersion string
 }
 
-func newDoctor(namespace string, tail int) *Doctor {
-	return &Doctor{namespace: namespace, tail: tail, kube: newKube()}
+func newDoctor(namespace string, tail int, verbose bool) *Doctor {
+	return &Doctor{namespace: namespace, tail: tail, verbose: verbose, kube: newKube()}
 }
 
 func (d *Doctor) record(name string, st Status, detail string) {
