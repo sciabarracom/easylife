@@ -1,17 +1,11 @@
 name: Build
 
 on:
-  workflow_dispatch:
-    inputs:
-      arch:
-        description: Architectures to build
-        type: choice
-        required: true
-        default: all
-        options:
-          - all
-          - amd
-          - arm
+  push:
+    tags:
+    - '*''
+    branches-ignore:
+    - '**'
 
 permissions:
   contents: write
@@ -71,8 +65,8 @@ jobs:
         working-directory: packages
 
       - name: package
-        run: sudo -E ./package.sh
-        working-directory: packages
+        run: sudo -E ./package.sh openserverless
+        working-directory: packages ${{github.refname}}
 
       - name: publish
         env:
