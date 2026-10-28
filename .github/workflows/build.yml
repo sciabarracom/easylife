@@ -65,8 +65,8 @@ jobs:
         working-directory: packages
 
       - name: package
-        run: sudo -E ./package.sh openserverless
-        working-directory: packages ${{github.ref_name}}
+        run: sudo -E ./package.sh openserverless "${{github.ref_name}}"
+        working-directory: packages
 
       - name: publish
         env:
