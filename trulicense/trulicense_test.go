@@ -92,6 +92,9 @@ func TestNginxConf(t *testing.T) {
 		`server_name ~^(?<app>[a-z0-9-]+)\.foo\.n7s\.co$;`,
 		"proxy_set_header Host miniops.me;",
 		"proxy_set_header Host $app.miniops.me;",
+		"server_name s3.foo.n7s.co;",
+		"proxy_pass " + s3URL + ";",
+		"proxy_set_header Host $host;",
 		"proxy_set_header Upgrade $http_upgrade;",
 	} {
 		if !strings.Contains(conf, want) {

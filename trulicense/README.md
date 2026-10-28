@@ -18,7 +18,8 @@ that `k3s kubectl` works and the `openserverless` namespace exists, then:
    `nginx:stable-alpine`, pulled on first use) which, for each licensed host,
    sends `http://<host>` to `miniops.me` and `http://<app>.<host>` to
    `<app>.miniops.me` through the Traefik ingress controller, with websockets
-   and bodies up to 1g;
+   and bodies up to 1g; `http://s3.<host>` instead goes straight to the
+   `seaweedfs` S3 service keeping its Host, because S3 signs it;
 3. creates the `openserverless-user-provisioning-token` secret with a random
    32-digit token, asking before replacing an existing one, and shows the token
    once.

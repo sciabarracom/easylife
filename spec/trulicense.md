@@ -20,6 +20,7 @@ and extract the hosts in the license,
 - accepts http://<app>.<name>.n7s.co and do a revderse proxy to the controller with Host: http://<app>.miniops.me
 - support web sockets
 - accept up to 1g payload
+- exception: for <app>=s3, requests https://s3.<name>.n7s.go it must NOT change the Host, it should stay https://s3.<name>.n7s.go because s3 signs the requests.
 
 provisioning hosts is idempotent, you can repat it
 but you may add multiple license creating multiple hosts from different licenses
