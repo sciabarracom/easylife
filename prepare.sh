@@ -4,6 +4,11 @@ cd "$(dirname $0)"
 
 echo "=== PREPARE ==="
 
+if ! which go
+then sudo apt install -y golang-go
+fi
+go version
+
 echo "=== compile trulicense and trudoctor ==="
 
 # Static, stripped binaries, installed setuid root: both need root for
@@ -59,9 +64,6 @@ fi
 
 echo "=== check ==="
 trudoctor || true
-
-
-exit
 
 echo "=== trim down openserverless ==="
 
