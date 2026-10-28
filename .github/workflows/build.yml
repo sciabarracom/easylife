@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     tags:
-    - '*''
+    - '*'
     branches-ignore:
     - '**'
 
@@ -66,7 +66,7 @@ jobs:
 
       - name: package
         run: sudo -E ./package.sh openserverless
-        working-directory: packages ${{github.refname}}
+        working-directory: packages ${{github.ref_name}}
 
       - name: publish
         env:
