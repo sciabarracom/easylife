@@ -24,7 +24,7 @@ echo "=== compile trulicense and trudoctor ==="
 # `k3s kubectl`.
 for tool in trudoctor trulicense; do
     CGO_ENABLED=0 go build -C "${tool}" -trimpath -ldflags="-s -w" -o "${tool}" .
-    sudo install -o root -g root -m 4755 "${tool}/${tool}" "/usr/bin/${tool}"
+    sudo install -v -o root -g root -m 4755 "${tool}/${tool}" "/usr/bin/${tool}"
 done
 
 echo "=== remove go ==="
