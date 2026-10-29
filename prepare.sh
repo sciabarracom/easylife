@@ -4,8 +4,17 @@ cd "$(dirname $0)"
 
 echo "=== PREPARE ==="
 
-if ! which go
-then sudo apt install -y golang-go
+GO_VERSION="${GO_VERSION:-1.27.3}"
+case "$(uname -m)" in
+    x86_64) GO_ARCH=amd64 ;;
+    aarch64|arm64) GO_ARCH=arm64 ;;
+    *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+esac
+export PATH="/usr/local/go/bin:${PATH}"
+if ! go version 2>/dev/null | grep -q "go${GO_VERSION} "
+then
+    sudo rm -rf /usr/local/go
+    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" | sudo tar xzf - -C /usr/local
 fi
 go version
 
@@ -17,6 +26,9 @@ for tool in trudoctor trulicense; do
     CGO_ENABLED=0 go build -C "${tool}" -trimpath -ldflags="-s -w" -o "${tool}" .
     sudo install -o root -g root -m 4755 "${tool}/${tool}" "/usr/bin/${tool}"
 done
+
+echo "=== remove go ==="
+sudo rm -Rf /usr/local/go
 
 echo "=== install k3s ==="
 
