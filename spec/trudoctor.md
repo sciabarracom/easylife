@@ -16,6 +16,9 @@ Use kubectl to test
 - there is a node trustant
 - there is a namespace openserverless
 - check all the pods in namespace openserverless and verify they are all Running or Completed
+  - report Failed pods individually rather than counting the same phase failure twice
+  - a terminal failed Job may be historical WARN only after a newer completed Job
+    owned by the same CronJob UID and namespace; keep the original evidence
 - check there are the following pods running:
 
 - couchdb-0
@@ -51,7 +54,7 @@ and there are those completed jobs:
   - CreateContainerConfigError: bad config (missing ConfigMap/Secret, etc.)
   - OOMKilled: container killed for exceeding memory limits
   - Error: container exited with a non-zero exit code
-  - Not Ready: pod is running but readiness probe is failing
+  - Not Ready: container is running but not Ready; its state alone does not prove a probe failed
   - Evicted: pod was evicted due to node pressure
   - Terminating: pod stuck in terminating state
 
@@ -67,6 +70,13 @@ and there are those completed jobs:
   - Terminating: show how long the pod has been terminating and if finalizers are blocking
 
 # Reporting
+
+Recognize the current `truserverless` and `trustant-serverless` package names
+alongside the supported legacy names. Report only actual dpkg registration.
+
+Read a bounded recent operator-log window for safe S3 IAM phase/category
+markers. Report these as diagnostic WARN observations without inferring current
+policy health or retry success. Older generic messages remain unclassified.
 
 Reports, adding the prefixes:
 

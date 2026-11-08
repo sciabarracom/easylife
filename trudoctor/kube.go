@@ -71,6 +71,9 @@ type Pod struct {
 	Metadata struct {
 		Name                       string
 		Namespace                  string
+		UID                        string
+		CreationTimestamp          time.Time
+		OwnerReferences            []OwnerReference
 		DeletionTimestamp          *time.Time
 		DeletionGracePeriodSeconds *int64
 		Finalizers                 []string
@@ -227,17 +230,7 @@ func (d *Doctor) runKubeChecks() {
 		}
 	}
 
-	var bad []string
-	for _, p := range nsPods {
-		if p.Status.Phase != "Running" && p.Status.Phase != "Succeeded" {
-			bad = append(bad, fmt.Sprintf("%s (%s)", p.Metadata.Name, p.Status.Phase))
-		}
-	}
-	if len(bad) > 0 {
-		d.record("pods Running or Completed", Fail, strings.Join(bad, ", "))
-	} else {
-		d.record("pods Running or Completed", Pass, fmt.Sprintf("all %d pods", len(nsPods)))
-	}
+	d.recordPodPhases(nsPods)
 
 	// Trustant is optional: without its pod the platform is plain
 	// OpenServerless, which is not an error.
@@ -256,6 +249,11 @@ func (d *Doctor) runKubeChecks() {
 
 	var jobs struct{ Items []Job }
 	jobsErr := d.kube.json(&jobs, "get", "jobs", "-n", d.namespace)
+	if jobsErr == nil {
+		d.jobs = jobs.Items
+	} else {
+		d.record("job history", Warn, "unavailable; failed pods remain failures")
+	}
 	for _, pat := range requiredJobs {
 		// A completed job's pod may already be gone (TTL), so fall back to the
 		// Job object itself.
@@ -270,8 +268,19 @@ func (d *Doctor) runKubeChecks() {
 }
 
 type Job struct {
-	Metadata struct{ Name string }
-	Status   struct{ Succeeded int }
+	Metadata struct {
+		Name, Namespace, UID string
+		CreationTimestamp    time.Time
+		OwnerReferences      []OwnerReference
+	}
+	Status struct {
+		Succeeded, Active int
+		CompletionTime    time.Time
+		Conditions        []struct {
+			Type, Status       string
+			LastTransitionTime time.Time
+		}
+	}
 }
 
 func completedJob(jobs []Job, pattern string) string {

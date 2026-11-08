@@ -33,6 +33,7 @@ func main() {
 
 	section("Anomaly detection")
 	d.runAnomalyDetection()
+	d.collectS3Diagnostics()
 
 	if *verbose {
 		section("Logs")

@@ -55,9 +55,16 @@ func (d *Doctor) findPod(name string) *Pod {
 // packageVersion is the version of the installed platform package, in either
 // of its flavours (see package.sh).
 func packageVersion() string {
-	for _, pkg := range []string{"openserverless", "trustant"} {
+	return installedPackageVersion(func(pkg string) (string, error) {
 		out, err := exec.Command("dpkg-query", "-W", "-f=${db:Status-Status} ${Version}", pkg).Output()
-		if status, version, ok := strings.Cut(strings.TrimSpace(string(out)), " "); err == nil && ok && status == "installed" {
+		return string(out), err
+	})
+}
+
+func installedPackageVersion(query func(string) (string, error)) string {
+	for _, pkg := range []string{"truserverless", "trustant-serverless", "openserverless", "trustant"} {
+		out, err := query(pkg)
+		if status, version, ok := strings.Cut(strings.TrimSpace(out), " "); err == nil && ok && status == "installed" && strings.TrimSpace(version) != "" {
 			return pkg + " " + version
 		}
 	}

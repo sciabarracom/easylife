@@ -102,7 +102,7 @@ func detectAnomalies(p *Pod, now time.Time) []Anomaly {
 		if p.Metadata.DeletionTimestamp == nil {
 			for _, cs := range p.Status.ContainerStatuses {
 				if !cs.Ready && cs.State.Running != nil {
-					add(NotReady, cs.Name, "readiness probe failing")
+					add(NotReady, cs.Name, "container is not Ready; check startup/readiness conditions and events")
 				}
 			}
 		}
@@ -120,7 +120,8 @@ func (d *Doctor) runAnomalyDetection() {
 		return
 	}
 	for _, a := range d.anomalies {
-		d.record("anomaly "+a.Kind, Fail, a.Where()+": "+a.Summary)
+		status, name, detail := d.anomalyCheck(a)
+		d.record(name, status, detail)
 		progress("  gathering details on %s...", a.Where())
 		d.logs = append(d.logs, LogSection{
 			Prefix:      "AN",

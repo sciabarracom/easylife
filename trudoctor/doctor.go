@@ -43,6 +43,7 @@ type Doctor struct {
 	kube       *Kube
 	checks     []Check
 	pods       []Pod // all pods, every namespace
+	jobs       []Job // verified Job objects in the selected namespace
 	anomalies  []Anomaly
 	logs       []LogSection
 	k8sVersion string
